@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Weather — Live Forecast</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Live weather forecast with animated backgrounds (rain, thunder, clouds) and Google Analytics" />
+
+  <!-- GOOGLE ANALYTICS (replace with your GA4 ID) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    /* Replace G-XXXXXXXXXX with your Measurement ID */
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+
+  <!-- FONTS -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#f6f8fb;
+      --card:#ffffff;
+      --muted:#58606b;
+      --accent:#0066cc;
+      --glass: rgba(255,255,255,0.8);
+      --shadow: 0 6px 18px rgba(20,30,40,0.08);
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      margin:0;
+      min-height:100vh;
+      background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/World_map_blank_without_borders.svg/1920px-World_map_blank_without_borders.svg.png') center/cover fixed no-repeat;
+      background-color: var(--bg);
+      color:#12202b;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      padding:28px;
+    }
+
+    /* App container */
+    .wrap{
+      max-width:980px;
+      margin: 24px auto;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:18px;
+      align-items:start;
+      padding:18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.48));
+      border-radius:14px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+
+    header{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .brand{
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+    .logo{
+      width:46px;
+      height:46px;
+      border-radius:10px;
+      display:inline-grid;
+      place-items:center;
+      background:linear-gradient(135deg,#00aaff,#6dd3ff);
+      color:white;
+      font-weight:700;
+      box-shadow: 0 6px 18px rgba(0,160,255,0.12);
+    }
+    h1{ font-size:1.25rem; margin:0; }
+    .subtitle{ color:var(--muted); font-size:0.92rem; margin-top:4px; }
+
+    /* Search area */
+    .search {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .search input{
+      width:260px;
+      padding:10px 14px;
+      border-radius:999px;
+      border:1px solid rgba(10,20,30,0.06);
+      outline:none;
+      font-size:0.95rem;
+      background:transparent;
+    }
+    .search button{
+      padding:10px 14px;
+      border-radius:10px;
+      border:none;
+      background:var(--accent);
+      color:white;
+      cursor:pointer;
+      font-weight:600;
+      box-shadow: 0 6px 12px rgba(0,102,204,0.12);
+    }
+    .search button:active{ transform:translateY(1px) }
+
+    /* Main area */
+    .main{
+      display:grid;
+      grid-template-columns: 1fr 360px;
+      gap:18px;
+    }
+    @media (max-width:900px){
+      .main{ grid-template-columns: 1fr; }
+      .search input{ width:160px; }
+    }
+
+    /* Weather card */
+    .card{
+      background:var(--card);
+      border-radius:12px;
+      padding:18px;
+      box-shadow: var(--shadow);
+    }
+    .weather-top{
+      display:flex;
+      gap:16px;
+      align-items:center;
+    }
+    .icon{
+      width:120px;
+      height:120px;
+      display:grid;
+      place-items:center;
+      border-radius:12px;
+      background: linear-gradient(180deg, rgba(0,170,255,0.06), rgba(0,170,255,0.03));
+    }
+    .temp{
+      font-size:48px;
+      font-weight:700;
+      margin:0;
+    }
+    .meta{ color:var(--muted); font-size:0.95rem; }
+
+    .details{
+      margin-top:12px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .chip{
+      padding:8px 12px;
+      background: rgba(10,20,30,0.03);
+      border-radius:999px;
+      font-weight:600;
+      font-size:0.9rem;
+      color: #223;
+    }
+
+    /* side panel (forecast or info) */
+    .side{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .smallcard{
+      padding:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.85));
+      border-radius:10px;
+      box-shadow: 0 6px 16px rgba(10,20,30,0.04);
+      text-align:left;
+    }
+    .muted{ color:var(--muted); font-size:0.9rem; }
+
+    /* Weather background layers: clouds, rain, lightning */
+    .bg-layer{
+      position:fixed;
+      top:0;
+      left:0;
+      width:100%;
+      height:100%;
+      pointer-events:none;
+      z-index:0;
+      mix-blend-mode: normal;
+    }
+
+    /* clouds (drifting) */
+    .cloud{
+      position:fixed;
+      top:60px;
+      left:-30%;
+      width:320px;
+      height:120px;
+      background-image: url('https://pngimg.com/uploads/cloud/cloud_PNG27.png');
+      background-size:contain;
+      background-repeat:no-repeat;
+      opacity:0.85;
+      animation: drift 70s linear infinite;
+      transform: translateZ(0);
+      z-index:0;
+    }
+    .cloud.c2{
+      top:160px;
+      left:-40%;
+      width:220px;
+      height:90px;
+      background-image: url('https://pngimg.com/uploads/cloud/cloud_PNG28.png');
+      animation-duration:95s;
+      opacity:0.7;
+      z-index:0;
+    }
+    .cloud.c3{
+      top:260px;
+      left:-60%;
+      width:450px;
+      height:160px;
+      opacity:0.42;
+      animation-duration:120s;
+    }
+    @keyframes drift{
+      0% { transform: translateX(0); }
+      100% { transform: translateX(190vw); }
+    }
+
+    /* rain layer using many lines via pseudo-elements (CSS only) */
+    .rain{
+      position:fixed;
+      inset:0;
+      z-index:0;
+      pointer-events:none;
+      overflow:hidden;
+      opacity:0.9;
+    }
+    .rain:before{
+      content:'';
+      position:absolute;
+      width:200%;
+      height:200%;
+      left:-50%;
+      top:-50%;
+      background-image: linear-gradient(transparent 0 60%, rgba(100,140,180,0.25) 60% 61%, transparent 61% 100%);
+      background-size: 3px 12px;
+      animation: rainMove 0.6s linear infinite;
+      transform: rotate(12deg);
+      opacity:0.9;
+    }
+    @keyframes rainMove{
+      0% { transform: translateY(-10%) rotate(12deg); background-position: 0 0 }
+      100% { transform: translateY(100%) rotate(12deg); background-position: 0 100% }
+    }
+
+    /* lightning flash overlay */
+    .flash{
+      position:fixed;
+      inset:0;
+      background: rgba(255,255,255,0.85);
+      z-index:1;
+      pointer-events:none;
+      opacity:0;
+      mix-blend-mode:screen;
+      animation: flashAnim 4s infinite;
+    }
+    @keyframes flashAnim{
+      0%, 80% { opacity:0 }
+      81% { opacity:0.9 }
+      82% { opacity:0 }
+      92% { opacity:0.7 }
+      93% { opacity:0 }
+      100% { opacity:0 }
+    }
+
+    /* misc */
+    .note{ font-size:0.9rem; color:var(--muted); }
+    .footer{ text-align:center; color:var(--muted); font-size:0.9rem; margin-top:8px; }
+
+    /* accessibility focus */
+    input:focus, button:focus { box-shadow: 0 0 0 4px rgba(0,102,204,0.12); outline:none; }
+
+  </style>
+</head>
+<body>
+  <!-- Background layers -->
+  <div class="bg-layer" id="bgLayer">
+    <!-- clouds inserted dynamically -->
+  </div>
+
+  <main class="wrap" role="main" aria-labelledby="appTitle">
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true">WB</div>
+        <div>
+          <h1 id="appTitle">Weather Bazar</h1>
+          <div class="subtitle">Live weather — animated backgrounds & simple analytics</div>
+        </div>
+      </div>
+
+      <div class="search" role="search" aria-label="Search city">
+        <label for="cityInput" class="sr-only" style="display:none">City</label>
+        <input id="cityInput" type="text" placeholder="Enter city (e.g., New Delhi)" aria-label="City name" />
+        <button id="searchBtn" aria-label="Get weather">Get Weather</button>
+      </div>
+    </header>
+
+    <section class="main" aria-live="polite">
+      <!-- Left: main weather card -->
+      <article class="card" id="weatherCard" aria-labelledby="weatherTitle">
+        <div class="weather-top">
+          <div class="icon" id="iconWrap" aria-hidden="true">
+            <!-- weather icon -->
+            <img id="wicon" src="" alt="" style="width:92px;height:92px" />
+          </div>
+          <div style="flex:1">
+            <h2 id="weatherTitle" style="margin:0;font-size:1.05rem">--</h2>
+            <p class="muted" id="locMeta">--</p>
+
+            <p style="margin:10px 0 0">
+              <span class="temp" id="temp">--°C</span>
+              <span class="muted" style="margin-left:10px;font-size:0.95rem" id="cond">--</span>
+            </p>
+
+            <div class="details" id="details">
+              <div class="chip" id="humidity">Humidity: --</div>
+              <div class="chip" id="wind">Wind: --</div>
+              <div class="chip" id="pressure">Pressure: --</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <p class="note" id="updateNote">Enter a city and press Get Weather. Data provided by OpenWeatherMap.</p>
+        </div>
+      </article>
+
+      <!-- Right: side panel -->
+      <aside class="side">
+        <div class="smallcard">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Quick Info</strong></div>
+            <div class="muted" id="lastFetched">—</div>
+          </div>
+          <p class="muted" style="margin-top:10px;font-size:0.95rem">
+            Tip: use city name or "City, country code" (e.g., "Paris,fr").
+          </p>
+        </div>
+
+        <div class="smallcard">
+          <strong>Recent Cities</strong>
+          <div id="recentList" style="margin-top:10px"></div>
+        </div>
+
+        <div class="smallcard">
+          <strong>Info</strong>
+          <p class="muted" style="margin-top:8px">This is a demo app for learning. Free API usage limits apply.</p>
+        </div>
+      </aside>
+    </section>
+
+    <div class="footer">
+      <div>Built with ❤️ • Data from <a href="https://openweathermap.org/" target="_blank" rel="noopener">OpenWeatherMap</a></div>
+    </div>
+  </main>
+
+  <script>
+    /**
+     * Replace YOUR_API_KEY below with your OpenWeatherMap API key.
+     * Sign up: https://openweathermap.org/api
+     */
+    const API_KEY = "b582dd0f821bd5642a88b5cba6f67a6d"; // <-- REPLACE
+    const STORAGE_KEY = 'wb_recent_cities_v1';
+    const bgLayer = document.getElementById('bgLayer');
+
+    // DOM refs
+    const cityInput = document.getElementById('cityInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const weatherTitle = document.getElementById('weatherTitle');
+    const locMeta = document.getElementById('locMeta');
+    const tempEl = document.getElementById('temp');
+    const condEl = document.getElementById('cond');
+    const humidityEl = document.getElementById('humidity');
+    const windEl = document.getElementById('wind');
+    const pressureEl = document.getElementById('pressure');
+    const wicon = document.getElementById('wicon');
+    const updateNote = document.getElementById('updateNote');
+    const lastFetched = document.getElementById('lastFetched');
+    const recentList = document.getElementById('recentList');
+
+    // recent cities
+    function loadRecent(){
+      const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      recentList.innerHTML = '';
+      arr.slice(0,6).forEach(c=>{
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.style.margin='6px 6px 0 0';
+        b.textContent = c;
+        b.onclick = ()=> fetchWeather(c);
+        recentList.appendChild(b);
+      });
+    }
+    function pushRecent(city){
+      if(!city) return;
+      let arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      arr = [city, ...arr.filter(x=>x.toLowerCase()!=city.toLowerCase())];
+      if(arr.length>8) arr = arr.slice(0,8);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+      loadRecent();
+    }
+
+    // build OpenWeatherMap URL
+    function weatherUrl(city){
+      return `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=metric`;
+    }
+
+    // format time
+    function prettyTime(ts){
+      const d = new Date(ts);
+      return d.toLocaleString();
+    }
+
+    // clear bg extras
+    function clearBg(){
+      // remove any existing layers inside bgLayer
+      Array.from(bgLayer.children).forEach(el => bgLayer.removeChild(el));
+    }
+
+    // create cloud nodes
+    function showClouds(){
+      clearBg();
+      const c1 = document.createElement('div'); c1.className='cloud';
+      const c2 = document.createElement('div'); c2.className='cloud c2';
+      const c3 = document.createElement('div'); c3.className='cloud c3';
+      bgLayer.appendChild(c1); bgLayer.appendChild(c2); bgLayer.appendChild(c3);
+    }
+
+    // create rain node
+    function showRain(){
+      clearBg();
+      // add clouds + rain overlay
+      showClouds();
+      const rain = document.createElement('div'); rain.className='rain'; rain.setAttribute('aria-hidden','true');
+      bgLayer.appendChild(rain);
+    }
+
+    // lightning (flash)
+    function showThunder(){
+      clearBg();
+      showClouds();
+      const rain = document.createElement('div'); rain.className='rain'; bgLayer.appendChild(rain);
+      const flash = document.createElement('div'); flash.className='flash'; bgLayer.appendChild(flash);
+
+      // Slight extra: randomize flash animation timing by toggling animationDelay
+      flash.style.animationDelay = Math.random()*2 + 's';
+    }
+
+    // clear to minimal (no effects)
+    function showClear(){
+      clearBg();
+    }
+
+    // main UI update
+    function updateUI(data){
+      const name = `${data.name}, ${data.sys.country}`;
+      weatherTitle.textContent = name;
+      locMeta.textContent = `Lat ${data.coord.lat.toFixed(2)} • Lon ${data.coord.lon.toFixed(2)}`;
+      tempEl.textContent = Math.round(data.main.temp) + '°C';
+      condEl.textContent = data.weather[0].description.replace(/\b\w/g, l => l.toUpperCase());
+      humidityEl.textContent = 'Humidity: ' + data.main.humidity + '%';
+      windEl.textContent = 'Wind: ' + (data.wind.speed) + ' m/s';
+      pressureEl.textContent = 'Pressure: ' + data.main.pressure + ' hPa';
+      wicon.src = `https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png`;
+      wicon.alt = data.weather[0].description;
+
+      updateNote.textContent = `Last update: ${prettyTime(Date.now())}`;
+      lastFetched.textContent = new Date().toLocaleTimeString();
+
+      // visuals based on main category
+      const main = data.weather[0].main.toLowerCase();
+
+      if(main.includes('cloud')) {
+        showClouds();
+      } else if(main.includes('rain') || main.includes('drizzle')) {
+        showRain();
+      } else if(main.includes('thunder')) {
+        showThunder();
+      } else if(main.includes('snow')) {
+        // snow could be rendered with subtle opacity layer (use clouds here)
+        showClouds();
+      } else {
+        // clear / sunny
+        showClear();
+      }
+
+      // save to recent
+      pushRecent(name);
+    }
+
+    // fetch weather (with error handling)
+    async function fetchWeather(q){
+      if(!q) return;
+      weatherTitle.textContent = 'Loading...';
+      try{
+        const res = await fetch(weatherUrl(q));
+        const body = await res.json();
+        if(res.status !== 200){
+          weatherTitle.textContent = 'City not found';
+          locMeta.textContent = '';
+          tempEl.textContent = '--';
+          condEl.textContent = '';
+          updateNote.textContent = 'Try "City" or "City,country" (e.g., "London,uk")';
+          clearBg();
+          return;
+        }
+        updateUI(body);
+        // GA event
+        if(typeof gtag === 'function'){
+          gtag('event','search_city',{city:q});
+        }
+      }catch(e){
+        console.error(e);
+        weatherTitle.textContent = 'Network error';
+        updateNote.textContent = 'Check your internet connection or API key';
+        clearBg();
+      }
+    }
+
+    // wire events
+    searchBtn.addEventListener('click', ()=> {
+      const city = cityInput.value.trim();
+      if(!city){ cityInput.focus(); return; }
+      fetchWeather(city);
+      cityInput.value='';
+    });
+    cityInput.addEventListener('keydown', e=>{
+      if(e.key === 'Enter'){ searchBtn.click(); }
+    });
+
+    // load recent
+    loadRecent();
+
+    // try to show weather for a default city on first load
+    (function initDefault(){
+      const rec = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      if(rec.length>0){
+        // attempt first recent
+        fetchWeather(rec[0]);
+      } else {
+        // optional: auto-detect via IP? skip to avoid external dependency
+        // show gentle intro state
+        weatherTitle.textContent = 'Welcome — enter a city';
+        updateNote.textContent = 'Example: New York, London, Mumbai';
+      }
+    })();
+
+  </script>
+</body>
+</html>
